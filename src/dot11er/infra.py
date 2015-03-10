@@ -1,8 +1,10 @@
 #!/usr/bin/python
 
+import functools
+
 from scapy.all import *
 
-from dot11er.util import frame
+from dot11er.util import frame, simple_filter
 
 def RX_FRAME_QUEUE(mon_if):
     """Return name of queue used for frames received on monitoring interface
@@ -35,20 +37,13 @@ def RX_BEACON_QUEUE(mon_if):
     interface 'mon_if'."""
     return "%s.rx_beacon" % mon_if
 
-def rx_beacon(r, mon_if):
-    """Filter for beacon frames and publish them on queue
-    'RX_BEACON_QUEUE(mon_if)'."""
-    # TODO The function follows a more general pattern to be abstracted.
-    ps = r.pubsub()
-    in_queue = RX_FRAME_QUEUE(mon_if)
-    out_queue = RX_BEACON_QUEUE(mon_if)
-    ps.subscribe(in_queue)
-    for m in ps.listen():
-        f = frame(m)
-        # TODO add more reasonable sanity checks
-        if f.type == Dot11.TYPE_MANAGEMENT and \
-                f.subtype == Dot11.SUBTYPE["Management"]["Beacon"]:
-            r.publish(out_queue, f)
+# TODO add more reasonable sanity checks
+"""Filter for beacon frames and publish them on queue
+'RX_BEACON_QUEUE(mon_if)'."""
+rx_beacon = functools.partial(simple_filter, \
+        IN_QUEUE = RX_FRAME_QUEUE, OUT_QUEUE = RX_BEACON_QUEUE, \
+        filt = lambda f: f.type == Dot11.TYPE_MANAGEMENT and \
+            f.subtype == Dot11.SUBTYPE["Management"]["Beacon"])
 
 def AP_QUEUE(mon_if):
     """Return name of queue used for APs detected on monitoring interface
