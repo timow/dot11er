@@ -15,12 +15,12 @@ if __name__ == '__main__':
     redis_port = 6379
     redis_db   = 0
 
-    p_tx_frame = start_process(tx_frame, ( \
+    p_rx_dispatcher = start_process(rx_dispatcher, ( \
             redis.StrictRedis(redis_host, redis_port, redis_db), \
             mon_if))
-    p_rx_frame = start_process(rx_frame, ( \
+    p_rx_eap_dispatcher = start_process(rx_eap_dispatcher, ( \
             redis.StrictRedis(redis_host, redis_port, redis_db), \
             mon_if))
 
-    p_rx_frame.join()
-    p_tx_frame.join()
+    p_rx_dispatcher.join()
+    p_rx_eap_dispatcher.join()
