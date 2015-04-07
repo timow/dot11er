@@ -37,7 +37,7 @@ def probe_request(r):
         # TODO improve rate handling
         rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates']) / \
                 Dot11InfoElt(information = "\x02\x04\x0b\x16")
-        f = RadioTap()/mgt/ssid/rates
+        f = mgt/ssid/rates
 
         # remember state
         r.hset('state', sm(sta, bssid), 'probing')
@@ -71,7 +71,7 @@ def open_auth(r, mon_if):
                     addr2 = sta,
                     addr3 = bssid)
             auth = Dot11Auth(algo = "open", seqnum = 1)
-            f = RadioTap()/mgt/auth
+            f = mgt/auth
         
             # remember state
             r.hset('state', sm(sta, bssid), 'authenticating')
@@ -113,7 +113,7 @@ def association(r, mon_if):
                     Dot11RSNElt(PCS_List = [Dot11CipherSuite(Suite_Type = DOT11_CIPHER_SUITE_TYPE['CCMP'])], \
                     AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['PSK'])])
 
-            f = RadioTap()/mgt/assoc/ssid/rates/rsnInfo
+            f = mgt/assoc/ssid/rates/rsnInfo
 
             # remember state
             r.hset('state', sm(sta, bssid), 'associating')
@@ -175,4 +175,4 @@ def eap_id(r, mon_if):
 #                    eap = EAP(code = EAP.RESPONSE, id = eap.id, len = 1000, type = EAP.TYPE_ID)/"test@test.de"
 
 #                    p = mgt/LLC()/SNAP()/EAPOL()/eap
-#                    sendp(RadioTap()/p, iface = interface)
+#                    sendp(p, iface = interface)

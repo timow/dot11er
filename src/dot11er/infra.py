@@ -30,7 +30,7 @@ def tx_frame(r, mon_if):
     ps = r.pubsub()
     ps.subscribe(TX_FRAME_QUEUE(mon_if))
     for m in ps.listen():
-        sendp(frame(m), iface = mon_if)
+        sendp(RadioTap()/frame(m), iface = mon_if)
 
 def RX_BEACON_QUEUE(mon_if):
     """Return name of queue used for beacon frames received on monitoring
