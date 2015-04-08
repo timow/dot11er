@@ -1,7 +1,9 @@
 | Queue Name        | Description                                          | Default Publisher           | Default Subscriber                  |
 | ----------------- | ---------------------------------------------------- | --------------------------- | ----------------------------------- |
 | MON.rx_frame      | Publish all frames received on 'MON'                 | dot11er.infra.rx_frame      |                                     |
+|                   |                                                      | (better: mon_rxtx_pcap)     |                                     |
 | MON.tx_frame      | Transmit all received frames  on 'MON'               |                             | dot11er.infra.tx_frame              |
+|                   |                                                      |                             | (better: mon_rxtx_pcap)             |
 | MON.rx_beacon     | Publish all beacons received on 'MON'                | dot11er.infra.rx_dispatcher |                                     |
 | MON.rx_probe      | Publish all probe requests received on 'MON'         | dot11er.infra.rx_dispatcher |                                     |
 | MON.rx_probe_resp | Publish all probe responses received on 'MON'        | dot11er.infra.rx_dispatcher |                                     |
