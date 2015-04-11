@@ -165,17 +165,20 @@ def eap_id(r, mon_if):
         if r.hget('state', sm(sta,bssid)) == 'eapol_started':
             # TODO introduce proper logging
             print "[+] EAP ID (BSSID '%s')" % (bssid)
-#                eap = p[EAP]
-#                if eap.code == EAP.REQUEST and eap.type == EAP.TYPE_ID:
-#                    bssid = p.addr3
 
-#                    mgt = Dot11(subtype = SUBTYPE['Data']['Data'],\
-#                            type = Dot11.TYPE_DATA,\
-#                            FCfield = "to-DS",
-#                            addr1 = bssid,
-#                            addr2 = my_mac,
-#                            addr3 = bssid)
-#                    eap = EAP(code = EAP.RESPONSE, id = eap.id, len = 1000, type = EAP.TYPE_ID)/"test@test.de"
+            mgt = Dot11(subtype = Dot11.SUBTYPE['Data']['Data'],\
+                    type = Dot11.TYPE_DATA,\
+                    FCfield = "to-DS",
+                    addr1 = bssid,
+                    addr2 = sta,
+                    addr3 = bssid)
 
-#                    p = mgt/LLC()/SNAP()/EAPOL()/eap
-#                    sendp(p, iface = interface)
+            # TODO improve EAP ID handling
+            eap = EAP(code = EAP.RESPONSE, id = f[EAP].id, type = EAP.TYPE_ID)/"test@test.de"
+
+            f = mgt/LLC()/SNAP()/EAPOL()/eap
+
+            # remember state
+            r.hset('state', sm(sta, bssid), 'eap_id')
+
+            r.publish(TX_FRAME_QUEUE(mon_if), f)
