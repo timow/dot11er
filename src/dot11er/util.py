@@ -2,7 +2,7 @@
 
 import multiprocessing
 
-from scapy.all import RadioTap
+from scapy.all import RadioTap,Dot11Elt,DOT11_INFO_ELT
 
 def start_process(func, args = ()):
     p = multiprocessing.Process(target = func, args = args)
@@ -11,6 +11,12 @@ def start_process(func, args = ()):
 
 def frame(redis_msg):
     return RadioTap(redis_msg['data'])
+
+def essid(frame):
+    for e in frame[Dot11Elt]:
+        if e.ID == DOT11_INFO_ELT['SSID']:
+            return e.SSID.SSID
+    return None
 
 def simple_filter(r, mon_if, IN_QUEUE, OUT_QUEUE, filt):
     ps = r.pubsub()

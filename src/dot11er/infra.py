@@ -4,7 +4,7 @@ import functools
 
 from scapy.all import *
 
-from dot11er.util import frame, simple_filter
+from dot11er.util import frame, essid
 
 def RX_FRAME_QUEUE(mon_if):
     """Return name of queue used for frames received on monitoring interface
@@ -122,6 +122,5 @@ def ap_dump(r, mon_if):
 
         # TODO add sanity checks
         bssid = f.addr3
-        if f.haslayer(Dot11SSIDElt):
-            essid = f[Dot11SSIDElt].SSID
-            r.publish(out_queue, (essid, bssid))
+        if essid(f):
+            r.publish(out_queue, (essid(f), bssid))
