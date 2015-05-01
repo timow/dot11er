@@ -177,7 +177,7 @@ def eap_id(r, mon_if):
                     addr3 = bssid)
 
             # TODO improve EAP ID handling
-            eap = EAP(code = EAP.RESPONSE, id = f[EAP].id, type = EAP.TYPE_ID)/"test@test.de"
+            eap = EAP(code = EAP.RESPONSE, id = eap.id, type = EAP.TYPE_ID)/"test@test.de"
 
             f = mgt/LLC()/SNAP()/EAPOL()/eap
 
