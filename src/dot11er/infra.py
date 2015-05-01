@@ -83,13 +83,13 @@ def rx_dispatcher(r, mon_if):
         if f.type == Dot11.TYPE_MANAGEMENT and mng_queue.has_key(f.subtype):
             r.publish(mng_queue[f.subtype], f)
 
-def RX_EAP_ID_QUEUE(mon_if):
-    """Return name of queue used for EAP ID request frames received on
-    monitoring interface 'mon_if'."""
-    return "%s.rx_eap_id" % mon_if
+def RX_EAP_QUEUE(mon_if):
+    """Return name of queue used for EAP frames received on monitoring interface
+    'mon_if'."""
+    return "%s.rx_eap" % mon_if
 
 def rx_eap_dispatcher(r, mon_if):
-    """Dispatch received EAP frames to EAP queues."""
+    """Dispatch received EAP frames to EAP queue."""
     ps = r.pubsub()
     ps.subscribe(RX_FRAME_QUEUE(mon_if))
 
@@ -99,9 +99,7 @@ def rx_eap_dispatcher(r, mon_if):
         if f.haslayer(Dot11) and \
                 f.type == Dot11.TYPE_DATA and \
                 f.haslayer(EAP):
-            eap = f[EAP]
-            if eap.code == EAP.REQUEST and eap.type == EAP.TYPE_ID:
-                r.publish(RX_EAP_ID_QUEUE(mon_if), f)
+            r.publish(RX_EAP_QUEUE(mon_if), f)
 
 def AP_QUEUE(mon_if):
     """Return name of queue used for APs detected on monitoring interface

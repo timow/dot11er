@@ -153,7 +153,7 @@ def eap_id(r, mon_if):
     Perform EAP ID on request.
     'eapol_started' -- EAP ID req / EAP ID resp --> 'eap_identified'"""
     ps = r.pubsub()
-    ps.subscribe(RX_EAP_ID_QUEUE(mon_if))
+    ps.subscribe(RX_EAP_QUEUE(mon_if))
 
     for m in ps.listen():
         f = frame(m)
