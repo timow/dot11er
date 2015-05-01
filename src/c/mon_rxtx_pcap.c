@@ -62,7 +62,7 @@ void my_redisConnect() {
         } else {
             printf("Connection error: can't allocate redis context\n");
         }
-        // TODO close pcap session
+        pcap_close(handle);
         exit(4);
     }
 }
@@ -110,6 +110,7 @@ void tx_frame() {
 
             freeReplyObject(reply);
         }
+        pcap_close(handle);
 }
 
 void rx_frame() {
