@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import multiprocessing
+import argparse, multiprocessing
 
 from scapy.all import RadioTap,Dot11Elt,DOT11_INFO_ELT
 
@@ -28,3 +28,14 @@ def simple_filter(r, mon_if, IN_QUEUE, OUT_QUEUE, filt):
         if filt(f):
             r.publish(out_queue, f)
 
+def default_arg_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--mon_if', default = 'mon0', \
+            help = 'WLAN monitoring interface (default: mon0)')
+    parser.add_argument('--redis_host', default = '127.0.0.1', \
+            help = 'redis server hostname (default: 127.0.0.1)')
+    parser.add_argument('--redis_port', default = 6379, type = int, \
+            help = 'redis server port (default: 6379)')
+    parser.add_argument('--redis_db', default = 0, type = int, \
+            help = 'redis db (default: 0)')
+    return parser
