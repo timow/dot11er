@@ -151,13 +151,12 @@ def eapol_start(r, mon_if):
 def eap_id(r, mon_if):
     """State transition on EAP ID:
     Perform EAP ID on request.
-    'eapol_started' -- EAP ID req / EAP ID resp --> 'eap_identified'"""
+    'eapol_started' -- EAP ID req / EAP ID resp --> 'eap_id'"""
     ps = r.pubsub()
     ps.subscribe(RX_EAP_QUEUE(mon_if))
 
     for m in ps.listen():
         f = frame(m)
-
         sta = f.addr1
         bssid = f.addr3
         essid = r.hget('essid', sm(sta,bssid))
