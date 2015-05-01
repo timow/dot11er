@@ -24,6 +24,17 @@ redisContext *r = NULL;
 redisReply *reply;
 
 int wait_for_ack_flag = 1;
+const char RADIOTAP_NOACK[] = {
+    0x00,                   // version
+    0x00,                   // padding
+    0x0a, 0x00,             // length
+    0x00, 0x80, 0x00, 0x00, // IEEE80211_RADIOTAP_TX_FLAGS
+    0x08, 0x00};            // IEEE80211_RADIOTAP_F_TX_NOACK
+const char RADIOTAP_ACK[] = {
+    0x00,                    // version
+    0x00,                    // padding
+    0x08, 0x00,              // length
+    0x00, 0x00, 0x00, 0x00}; // no flags
 
 void publish_frame(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
     reply = redisCommand(r, "PUBLISH %s.rx_frame %b", mon_if, packet, (size_t) header->len);
@@ -57,17 +68,18 @@ void my_redisConnect() {
 }
 
 void tx_frame() {
-/*        unsigned char buf[8192] = {0x00,                   // version*/
-/*               0x00,                   // padding*/
-/*               0x0a, 0x00,             // length*/
-/*               0x00, 0x80, 0x00, 0x00, // IEEE80211_RADIOTAP_TX_FLAGS*/
-/*               0x08, 0x00,             // IEEE80211_RADIOTAP_F_TX_NOACK*/
-/*        };*/
-        unsigned char buf[8192] = {0x00,                   // version
-               0x00,                   // padding
-               0x08, 0x00,             // length
-               0x00, 0x00, 0x00, 0x00, // no flags
-        };
+        unsigned char buf[8192] = {};
+        unsigned int len_radiotap_hdr;
+
+        // fill buf with radiotap header
+        if (wait_for_ack_flag) {
+            len_radiotap_hdr = sizeof(RADIOTAP_ACK);
+            memcpy(buf, RADIOTAP_ACK, len_radiotap_hdr);
+        }
+        else {
+            len_radiotap_hdr = sizeof(RADIOTAP_NOACK);
+            memcpy(buf, RADIOTAP_NOACK, len_radiotap_hdr);
+        }
 
         my_pcap_open_live();
         my_redisConnect();
@@ -86,11 +98,8 @@ void tx_frame() {
                 // TODO assert str type for element[2]
                 // TODO assert len suitable for buf
                 // TODO improve usage of constants
-                // TODO address pcap_inject being a bottleneck
-/*                memcpy((void *)&buf[10], reply->element[2]->str, reply->element[2]->len);*/
-/*                pcap_inject(handle, buf, reply->element[2]->len + 10);*/
-                memcpy((void *)&buf[8], reply->element[2]->str, reply->element[2]->len);
-                pcap_inject(handle, buf, reply->element[2]->len + 8);
+                memcpy((void *)&buf[len_radiotap_hdr], reply->element[2]->str, reply->element[2]->len);
+                pcap_inject(handle, buf, reply->element[2]->len + len_radiotap_hdr);
             }
             else if (reply->type != REDIS_REPLY_ARRAY) {
                 fprintf(stderr, "[-] except redis array reply, but got type %u\n", reply->type);
