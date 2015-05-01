@@ -162,6 +162,10 @@ def eap_id(r, mon_if):
         essid = r.hget('essid', sm(sta,bssid))
 
         if r.hget('state', sm(sta,bssid)) == 'eapol_started':
+            eap = f[EAP]
+            if eap.code != EAP.REQUEST or eap.type != EAP.TYPE_ID:
+                continue
+
             # TODO introduce proper logging
             print "[+] EAP ID (BSSID '%s')" % (bssid)
 
