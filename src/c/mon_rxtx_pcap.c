@@ -23,7 +23,7 @@ int redis_port = 6379;          // redis port (6379 as default)
 redisContext *r = NULL;
 redisReply *reply;
 
-int wait_for_ack_flag = 1;
+int wait_for_ack = 1;
 const char RADIOTAP_NOACK[] = {
     0x00,                   // version
     0x00,                   // padding
@@ -72,7 +72,7 @@ void tx_frame() {
         unsigned int len_radiotap_hdr;
 
         // fill buf with radiotap header
-        if (wait_for_ack_flag) {
+        if (wait_for_ack) {
             len_radiotap_hdr = sizeof(RADIOTAP_ACK);
             memcpy(buf, RADIOTAP_ACK, len_radiotap_hdr);
         }
@@ -132,10 +132,10 @@ int main(int argc, char *argv[]) {
     int c;
     while(true) {
         struct option long_options[] = {
-            {"no_ack",     no_argument,       &wait_for_ack_flag, 0},
-            {"redis_host", required_argument, NULL,               'h'},
-            {"redis_port", required_argument, NULL,               'p'},
-            {"mon_if",     required_argument, NULL,               'm'},
+            {"noack",      no_argument,       &wait_for_ack, 0},
+            {"redis_host", required_argument, NULL,          'h'},
+            {"redis_port", required_argument, NULL,          'p'},
+            {"mon_if",     required_argument, NULL,          'm'},
             {0, 0, 0, 0}
         };
 
