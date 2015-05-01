@@ -13,9 +13,13 @@ def frame(redis_msg):
     return RadioTap(redis_msg['data'])
 
 def essid(frame):
-    for e in frame[Dot11Elt]:
+    i = 1
+    e = frame.getlayer(Dot11Elt, i)
+    while e:
         if e.ID == DOT11_INFO_ELT['SSID']:
-            return e.SSID.SSID
+            return e.info.SSID
+        i += 1
+        e = frame.getlayer(Dot11Elt, i)
     return None
 
 def simple_filter(r, mon_if, IN_QUEUE, OUT_QUEUE, filt):
