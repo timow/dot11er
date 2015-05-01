@@ -146,6 +146,9 @@ int main(int argc, char *argv[]) {
             break;
 
         switch (c) {
+            case 0:
+                // nothing else to do for no_ack
+                break;
             case 'h':
                 redis_host = optarg;
                 break;
