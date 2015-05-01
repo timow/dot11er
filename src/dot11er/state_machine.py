@@ -185,3 +185,49 @@ def eap_id(r, mon_if):
             r.hset('state', sm(sta, bssid), 'eap_id')
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
+
+def eap_tls_client_hello(r, mon_if):
+    """State transition on EAP TLS Client Hello:
+    Perform EAP-TLS Client Hello.
+    'eap_id' -- EAP TLS START / EAP TLS Client Hello --> 'eap_tls_client_hello'"""
+    ps = r.pubsub()
+    ps.subscribe(RX_EAP_QUEUE(mon_if))
+
+    for m in ps.listen():
+        f = frame(m)
+        sta = f.addr1
+        bssid = f.addr3
+        essid = r.hget('essid', sm(sta,bssid))
+
+        if r.hget('state', sm(sta,bssid)) == 'eap_id':
+            eap = f[EAP]
+            if eap.code != EAP.REQUEST or eap.type != EAP.TYPE_TLS \
+                    or not eap.haslayer(EAPTLSRequest):
+                continue
+
+            eapTls = eap[EAPTLSRequest]
+            if eapTls.EAP_TLS_start != 1:
+                continue
+
+            # TODO introduce proper logging
+            print "[+] EAP TLS Client Hello (BSSID '%s')" % (bssid)
+
+            mgt = Dot11(subtype = Dot11.SUBTYPE['Data']['Data'],\
+                    type = Dot11.TYPE_DATA,\
+                    FCfield = "to-DS",
+                    addr1 = bssid,
+                    addr2 = sta,
+                    addr3 = bssid)
+
+            eap = EAP(code = EAP.RESPONSE, id = eap.id, type = EAP.TYPE_TLS)
+            eapTls = EAPTLSResponse()
+            clientHello = TLSClientHello(compression_methods=range(0xff), cipher_suites=range(0xff))
+
+            f = mgt/LLC()/SNAP()/EAPOL()/eap/EAPTLSResponse()/TLSRecord()/TLSHandshake()/clientHello
+            f.show2()
+
+            # remember state
+            r.hset('state', sm(sta, bssid), 'eap_tls_client_hello')
+
+            r.publish(TX_FRAME_QUEUE(mon_if), f)
+
