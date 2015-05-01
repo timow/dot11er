@@ -94,18 +94,25 @@ void tx_frame() {
         }
 
         while(redisGetReply(r,(void **)&reply) == REDIS_OK) {
-            if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 3) {
-                // TODO assert str type for element[2]
-                // TODO assert len suitable for buf
+            if (reply->type == REDIS_REPLY_ARRAY \
+                    && reply->elements == 3 \
+                    && reply->element[2]->type == REDIS_REPLY_STRING
+                    && (len_radiotap_hdr + reply->element[2]->len) <= sizeof(buf)) {
                 // TODO improve usage of constants
                 memcpy((void *)&buf[len_radiotap_hdr], reply->element[2]->str, reply->element[2]->len);
                 pcap_inject(handle, buf, reply->element[2]->len + len_radiotap_hdr);
             }
             else if (reply->type != REDIS_REPLY_ARRAY) {
-                fprintf(stderr, "[-] except redis array reply, but got type %u\n", reply->type);
+                fprintf(stderr, "[-] expected redis array reply, but got type %u\n", reply->type);
             }
-            else {
-                fprintf(stderr, "[-] except redis array reply with 3 elements, but got %zu elements\n", reply->elements);
+            else if (reply->elements != 3) {
+                fprintf(stderr, "[-] expected redis array reply with 3 elements, but got %zu elements\n", reply->elements);
+            }
+            else if (reply->element[2]->type != REDIS_REPLY_STRING) {
+                fprintf(stderr, "[-] expected redis array reply with 2nd element being string, but got type %d\n", reply->element[2]->type);
+            }
+            else if ((len_radiotap_hdr + reply->element[2]->len) <= sizeof(buf)) {
+                fprintf(stderr, "[-] cannot handle frame of size %d\n", reply->element[2]->len);
             }
 
             freeReplyObject(reply);
