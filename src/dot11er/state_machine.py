@@ -34,10 +34,10 @@ def probe_request(r):
                 addr2 = sta,
                 addr3 = bssid)
         ssid = Dot11Elt(ID = DOT11_INFO_ELT['SSID'],\
-                SSID = Dot11SSIDElt(SSID = essid))
+                info = Dot11SSIDElt(SSID = essid))
         # TODO improve rate handling
         rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
-                information = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
+                info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
         f = mgt/ssid/rates
 
         # remember state
@@ -104,13 +104,13 @@ def association(r, mon_if):
                     addr3 = bssid)
             assoc = Dot11AssoReq(cap = 0x3104)
             ssid = Dot11Elt(ID = DOT11_INFO_ELT['SSID'],\
-                    SSID = Dot11SSIDElt(SSID = essid))
+                    info = Dot11SSIDElt(SSID = essid))
             # TODO improve rate handling
             rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
-                    information = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
+                    info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
             # TODO improve RSN handling
             rsnInfo = Dot11Elt(ID = DOT11_INFO_ELT['RSN'],\
-                    RSN = Dot11RSNElt(
+                    info = Dot11RSNElt(
                         PCS_List = [Dot11CipherSuite(Suite_Type = DOT11_CIPHER_SUITE_TYPE['CCMP'])],
                         AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['IEEE802.1X'])]))
 #                    AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['PSK'])])
