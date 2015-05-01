@@ -27,9 +27,11 @@ int wait_for_ack_flag = 1;
 
 void publish_frame(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
     reply = redisCommand(r, "PUBLISH %s.rx_frame %b", mon_if, packet, (size_t) header->len);
-    // TODO add proper error handling
-    // TODO remove RadioTap
-    freeReplyObject(reply);
+    if (reply != NULL) {
+        freeReplyObject(reply);
+    } else {
+        fprintf(stderr, "[-] couldn't publish to rx_frame queue\n");
+    }
 }
 
 void my_pcap_open_live() {
@@ -71,8 +73,13 @@ void tx_frame() {
         my_redisConnect();
 
         reply = redisCommand(r, "SUBSCRIBE %s.tx_frame", mon_if);
-        // TODO add proper error handling
-        freeReplyObject(reply);
+        if (reply != NULL) {
+            freeReplyObject(reply);
+        } else {
+            fprintf(stderr, "[-] couldn't subscribe to tx_frame queue\n");
+            pcap_close(handle);
+            exit(5);
+        }
 
         while(redisGetReply(r,(void **)&reply) == REDIS_OK) {
             if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 3) {
