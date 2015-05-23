@@ -2,6 +2,7 @@
 
 import argparse, multiprocessing
 
+import redis
 from scapy.all import RadioTap,Dot11Elt,DOT11_INFO_ELT
 
 def start_process(func, args = ()):
@@ -43,3 +44,6 @@ def default_arg_parser():
     parser.add_argument('--redis_db', default = 0, type = int, \
             help = 'redis db (default: 0)')
     return parser
+
+def redis_obj(args):
+    return redis.StrictRedis(args.redis_host, args.redis_port, args.redis_db)
