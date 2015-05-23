@@ -42,6 +42,11 @@ def RX_PROBE_QUEUE(mon_if):
     interface 'mon_if'."""
     return "%s.rx_probe" % mon_if
 
+def TX_PROBE_QUEUE(mon_if):
+    """Return name of queue used for sending out probe request on monitoring
+    interface 'mon_if'."""
+    return "%s.tx_probe" % mon_if
+
 def RX_PROBE_RESP_QUEUE(mon_if):
     """Return name of queue used for probe response frames received on
     monitoring interface 'mon_if'."""
