@@ -9,18 +9,20 @@ from dot11er.util import essid
 def sm(sta, bssid):
     return (sta, bssid)
 
-def probe_request(r):
+def probe_request(r, mon_if):
     """Listen on 'probe_request' queue for requests to send out probes.
     Requests must have the form
-    "{ 'interface' : MONITORING INTERFACE,
-       'sta'       : STATION MAC,
+    "{ 'sta'       : STATION MAC,
        'bssid'     : BSSID,
-       'essid'     : ESSID}"."""
+       'essid'     : ESSID}".
+
+    ANY -- msg / probe req --> 'probing'"""
+
     ps = r.pubsub()
-    ps.subscribe('probe_request')
+    ps.subscribe(TX_PROBE_QUEUE(mon_if))
+
     for m in ps.listen():
         req = ast.literal_eval(m['data'])
-        mon_if = req['interface']
         sta = req['sta']
         bssid = req['bssid']
         essid = req['essid']
