@@ -13,6 +13,21 @@ def start_process(func, args = (), kwargs = {}):
 def frame(redis_msg):
     return RadioTap(redis_msg['data'])
 
+def frames_in_scope(r, queue, sta_list = None):
+    ps = r.pubsub()
+    ps.subscribe(queue)
+
+    for m in ps.listen():
+        f = frame(m)
+
+        sta = f.addr1
+
+        # skip frame if STA is not in scope
+        if sta_list and sta not in sta_list:
+            continue
+
+        yield f
+
 def essid(frame):
     i = 1
     e = frame.getlayer(Dot11Elt, i)
