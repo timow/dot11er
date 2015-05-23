@@ -4,7 +4,7 @@ import ast
 from scapy.all import *
 
 from dot11er.infra import *
-from dot11er.util import essid
+from dot11er.util import essid,frames_in_scope
 
 def sm(sta, bssid):
     return (sta, bssid)
@@ -48,16 +48,13 @@ def probe_request(r, mon_if):
 
         r.publish(TX_FRAME_QUEUE(mon_if), f)
 
-def open_auth(r, mon_if):
-    """State transition on open authentication:
-    Perform open authentication on received probe response.
-    'probing' -- probe_req / open auth --> 'authenticating'"""
-    ps = r.pubsub()
-    ps.subscribe(RX_PROBE_RESP_QUEUE(mon_if))
+def authentication(r, mon_if, sta_list = None, auth = Dot11Auth(algo = "open", seqnum = 1)):
+    """State transition on authentication:
+    Performs authentication on received probe response.
 
-    for m in ps.listen():
-        f = frame(m)
+    'probing' -- probe resp / auth --> 'authenticating'"""
 
+    for f in frames_in_scope(r, RX_PROBE_RESP_QUEUE(mon_if), sta_list):
         sta = f.addr1
         bssid = f.addr3
 
@@ -65,36 +62,43 @@ def open_auth(r, mon_if):
             # TODO check for correct ESSID
             # TODO introduce proper logging
             print "[+] successfully probed (ESSID '%s', BSSID '%s')" % (essid(f), bssid)
-            print "[*]     starting open auth"
+            print "[*]     starting authentication"
 
             mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Authentication'],\
                     type = Dot11.TYPE_MANAGEMENT,\
                     addr1 = bssid,
                     addr2 = sta,
                     addr3 = bssid)
-            auth = Dot11Auth(algo = "open", seqnum = 1)
             f = mgt/auth
         
-            # remember state
             r.hset('state', sm(sta, bssid), 'authenticating')
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
 
-def association(r, mon_if):
+def association(r, mon_if, sta_list = None, \
+        assoc = Dot11AssoReq(cap = 0x3104), \
+        rsn_info = Dot11Elt(ID = DOT11_INFO_ELT['RSN'], \
+            info = Dot11RSNElt(
+                PCS_List = [Dot11CipherSuite(Suite_Type = DOT11_CIPHER_SUITE_TYPE['CCMP'])],
+                AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['PSK'])]))
+        ):
     """State transition on association:
-    Perform association on successful authentication.
+    Performs association on successful received authentication.
+
     'authenticating' -- auth / assoc --> 'associating'"""
-    ps = r.pubsub()
-    ps.subscribe(RX_AUTH_QUEUE(mon_if))
 
-    for m in ps.listen():
-        f = frame(m)
+    # TODO improve rate handling
+    rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
+            info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
 
+    for f in frames_in_scope(r, RX_AUTH_QUEUE(mon_if), sta_list):
         sta = f.addr1
         bssid = f.addr3
         essid = r.hget('essid', sm(sta,bssid))
 
         if r.hget('state', sm(sta,bssid)) == 'authenticating':
+            # TODO check for successful auth
+            # TODO check for correct ESSID
             # TODO introduce proper logging
             print "[+] successfully authenticated (BSSID '%s')" % (bssid)
             print "[*]     associating"
@@ -104,64 +108,44 @@ def association(r, mon_if):
                     addr1 = bssid,
                     addr2 = sta,
                     addr3 = bssid)
-            assoc = Dot11AssoReq(cap = 0x3104)
             ssid = Dot11Elt(ID = DOT11_INFO_ELT['SSID'],\
                     info = Dot11SSIDElt(SSID = essid))
-            # TODO improve rate handling
-            rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
-                    info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
-            # TODO improve RSN handling
-            rsnInfo = Dot11Elt(ID = DOT11_INFO_ELT['RSN'],\
-                    info = Dot11RSNElt(
-                        PCS_List = [Dot11CipherSuite(Suite_Type = DOT11_CIPHER_SUITE_TYPE['CCMP'])],
-                        AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['IEEE802.1X'])]))
-#                    AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['PSK'])])
+            f = mgt/assoc/ssid/rates/rsn_info
 
-            f = mgt/assoc/ssid/rates/rsnInfo
-
-            # remember state
             r.hset('state', sm(sta, bssid), 'associating')
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
 
-def eapol_start(r, mon_if):
+def eapol_start(r, mon_if, sta_list = None):
     """State transition on EAPOL start:
     Start EAPOL on successful association.
-    'associating' -- assoc_resp / EAPOL_start --> 'eapol_started'"""
-    ps = r.pubsub()
-    ps.subscribe(RX_ASSOC_RESP_QUEUE(mon_if))
+    'associating' -- associaton resp / EAPOL_start --> 'eapol_started'"""
 
-    for m in ps.listen():
-        f = frame(m)
-
+    for f in frames_in_scope(r, RX_ASSOC_RESP_QUEUE(mon_if), sta_list):
         sta = f.addr1
         bssid = f.addr3
-        essid = r.hget('essid', sm(sta,bssid))
 
         if r.hget('state', sm(sta,bssid)) == 'associating':
+            # TODO check for successful association
             # TODO introduce proper logging
             print "[+] successfully associated (BSSID '%s')" % (bssid)
             print "[*]     starting EAPOL"
 
-            # remember state
             r.hset('state', sm(sta, bssid), 'eapol_started')
             # TODO complete me
 
 #            r.publish(TX_FRAME_QUEUE(mon_if), f)
 
 
-def eap_id(r, mon_if):
+def eap_id(r, mon_if, sta_list = None, \
+        eapid = EAP(code = EAP.RESPONSE, type = EAP.TYPE_ID)/"user@domain.com"):
     """State transition on EAP ID:
-    Perform EAP ID on request.
+    Performs EAP ID on request.
     'eapol_started' -- EAP ID req / EAP ID resp --> 'eap_id'"""
-    ps = r.pubsub()
-    ps.subscribe(RX_EAP_QUEUE(mon_if))
 
-    for m in ps.listen():
-        f = frame(m)
+    for f in frames_in_scope(r, RX_EAP_QUEUE(mon_if), sta_list):
         sta = f.addr1
         bssid = f.addr3
-        essid = r.hget('essid', sm(sta,bssid))
 
         if r.hget('state', sm(sta,bssid)) == 'eapol_started':
             eap = f[EAP]
@@ -177,29 +161,24 @@ def eap_id(r, mon_if):
                     addr1 = bssid,
                     addr2 = sta,
                     addr3 = bssid)
+            eapid.id = eap.id
+            f = mgt/LLC()/SNAP()/EAPOL()/eapid
 
-            # TODO improve EAP ID handling
-            eap = EAP(code = EAP.RESPONSE, id = eap.id, type = EAP.TYPE_ID)/"test@test.de"
-
-            f = mgt/LLC()/SNAP()/EAPOL()/eap
-
-            # remember state
             r.hset('state', sm(sta, bssid), 'eap_id')
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
 
-def eap_tls_client_hello(r, mon_if):
+def eap_tls_client_hello(r, mon_if, sta_list = None, \
+        client_hello = TLSClientHello(compression_methods=range(0xff), cipher_suites=range(0xff))
+        ):
     """State transition on EAP TLS Client Hello:
-    Perform EAP-TLS Client Hello.
-    'eap_id' -- EAP TLS START / EAP TLS Client Hello --> 'eap_tls_client_hello'"""
-    ps = r.pubsub()
-    ps.subscribe(RX_EAP_QUEUE(mon_if))
+    Performs EAP-TLS Client Hello.
 
-    for m in ps.listen():
-        f = frame(m)
+    'eap_id' -- EAP TLS START / EAP TLS Client Hello --> 'eap_tls_client_hello'"""
+
+    for f in frames_in_scope(r, RX_EAP_QUEUE(mon_if), sta_list):
         sta = f.addr1
         bssid = f.addr3
-        essid = r.hget('essid', sm(sta,bssid))
 
         if r.hget('state', sm(sta,bssid)) == 'eap_id':
             eap = f[EAP]
@@ -222,14 +201,8 @@ def eap_tls_client_hello(r, mon_if):
                     addr3 = bssid)
 
             eap = EAP(code = EAP.RESPONSE, id = eap.id, type = EAP.TYPE_TLS)
-            eapTls = EAPTLSResponse()
-            clientHello = TLSClientHello(compression_methods=range(0xff), cipher_suites=range(0xff))
+            f = mgt/LLC()/SNAP()/EAPOL()/eap/EAPTLSResponse()/TLSRecord()/TLSHandshake()/client_hello
 
-            f = mgt/LLC()/SNAP()/EAPOL()/eap/EAPTLSResponse()/TLSRecord()/TLSHandshake()/clientHello
-            f.show2()
-
-            # remember state
             r.hset('state', sm(sta, bssid), 'eap_tls_client_hello')
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
-
