@@ -23,6 +23,22 @@ int redis_port = 6379;          // redis port (6379 as default)
 redisContext *r = NULL;
 redisReply *reply;
 
+struct qf {
+    char *queue;
+    char *filter;
+};
+struct qf queue_filter[] = {
+    {"rx_frame",      NULL},
+    {"rx_beacon",     "type mgt subtype beacon"},
+    {"rx_probe_req",  "type mgt subtype probe-req"},
+    {"rx_probe_resp", "type mgt subtype probe-resp"},
+    {"rx_auth",       "type mgt subtype auth"},
+    {"rx_assoc_req",  "type mgt subtype assoc-req"},
+    {"rx_assoc_resp", "type mgt subtype assoc-resp"},
+    {"rx_eap",        "type data and ether[30:2] = 0x888e"},
+    {NULL,             NULL}
+};
+
 int wait_for_ack = 1;
 const char RADIOTAP_NOACK[] = {
     0x00,                   // version
@@ -36,8 +52,8 @@ const char RADIOTAP_ACK[] = {
     0x08, 0x00,              // length
     0x00, 0x00, 0x00, 0x00}; // no flags
 
-void publish_frame(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-    reply = redisCommand(r, "PUBLISH %s.rx_frame %b", mon_if, packet, (size_t) header->len);
+void publish_frame(u_char *queue, const struct pcap_pkthdr *header, const u_char *packet) {
+    reply = redisCommand(r, "PUBLISH %s.%s %b", mon_if, queue, packet, (size_t) header->len);
     if (reply != NULL) {
         freeReplyObject(reply);
     } else {
@@ -120,10 +136,25 @@ void tx_frame() {
         pcap_close(handle);
 }
 
-void rx_frame() {
+void rx_frame(char *queue, char *filter) {
+    struct bpf_program program;
+
     my_pcap_open_live();
     my_redisConnect();
-    pcap_loop(handle, -1, publish_frame, NULL);
+
+    if (filter != NULL) {
+        if (pcap_compile(handle, &program, filter, 1, PCAP_NETMASK_UNKNOWN) == -1) {
+            fprintf(stderr, "[-] error calling pcap_compile\n");
+            exit(6);
+        }
+
+        if (pcap_setfilter(handle, &program) == -1) {
+            fprintf(stderr,"[-] error setting filter\n");
+            exit(7);
+        }
+    }
+
+    pcap_loop(handle, -1, publish_frame, (u_char *)queue);
 }
 
 int main(int argc, char *argv[]) {
@@ -167,22 +198,37 @@ int main(int argc, char *argv[]) {
                 printf("      --no_ack                Don't wait for acknowledgment frames\n");
 
             default:
-                return(1);
+                exit(1);
         }
     }
 
     pid_t tx_frame_pid = fork();
-
     if (tx_frame_pid < 0) {
         fprintf(stderr, "[-] couldn't fork tx frame process\n");
-        return(2);
+        exit(1);
     }
     else if (tx_frame_pid == 0) {
         tx_frame();
+        return 0;
     }
-    else {
-        rx_frame();
-        waitpid(tx_frame_pid, NULL, 0);
+
+    int rx_cnt;
+    for (rx_cnt = 0; queue_filter[rx_cnt].queue != NULL; rx_cnt++) {
+        pid_t rx_pid = fork();
+        if (rx_pid < 0) {
+            fprintf(stderr, "[-] couldn't fork rx process\n");
+            exit(1);
+        }
+        else if (rx_pid == 0) {
+            rx_frame(queue_filter[rx_cnt].queue, queue_filter[rx_cnt].filter);
+            return 0;
+        }
+    }
+
+    waitpid(tx_frame_pid, NULL, 0);
+    int i;
+    for (i = 0; i < rx_cnt; i++) {
+        waitpid(-1, NULL, 0);
     }
 
     return 0;
