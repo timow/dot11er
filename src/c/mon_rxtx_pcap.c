@@ -35,7 +35,7 @@ struct qf queue_filter[] = {
     {"rx_auth",       "type mgt subtype auth"},
     {"rx_assoc_req",  "type mgt subtype assoc-req"},
     {"rx_assoc_resp", "type mgt subtype assoc-resp"},
-    {"rx_eap",        "type data and ether[30:2] = 0x888e"},
+    {"rx_eap_frame",  "type data and ether[30:2] = 0x888e"},
     {NULL,             NULL}
 };
 

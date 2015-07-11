@@ -12,30 +12,35 @@ RSN_INFO = Dot11Elt(ID = DOT11_INFO_ELT['RSN'], \
             AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['IEEE802.1X'])]))
 
 def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
-    for f in frames_in_scope(r, RX_EAP_QUEUE(mon_if), sta_list):
-        sta = f.addr1
-        bssid = f.addr3
+    ps = r.pubsub()
+    ps.subscribe(RX_PEER_TLS_QUEUE(mon_if))
 
-        if r.hget('state', sm(sta,bssid)) == 'eap_tls_client_hello':
-            eap = f[EAP]
-            if eap.code != EAP.REQUEST or eap.type != EAP.TYPE_TLS \
-                    or not eap.haslayer(SSL):
-                continue
+    for m in ps.listen():
+        msg = ast.literal_eval(m['data'])
+        sta = msg['sta']
 
-            # TODO introduce proper logging
-            print "[+] EAP TLS Server Cert Dump (BSSID '%s')" % (bssid)
+        # skip frame if STA is not in scope
+        if sta_list and sta not in sta_list:
+            continue
 
-            ssl = eap[SSL]
-            for r in ssl.records:
-                if r.content_type == 0x16: # handshake
-                    h = r[TLSHandshake]
-                    if h.type == 0x0b: # certificate
-                        certList = h[TLSCertificateList]
-                        cert = certList.certificates[0]
-                        c = open("{bssid}.der".format(bssid = bssid), 'wb')
-                        c.write(cert.data)
-                        c.close()
-                        return
+        bssid = msg['bssid']
+        eapId = msg['eap-id']
+        tlsStart = int(msg['tls-start'])
+        tls = SSL(msg['tls'])
+
+        # TODO introduce proper logging
+        print "[+] EAP TLS Server Cert Dump (BSSID '%s')" % (bssid)
+
+        for r in tls.records:
+            if r.content_type == 0x16: # handshake
+                h = r[TLSHandshake]
+                if h.type == 0x0b: # certificate
+                    certList = h[TLSCertificateList]
+                    cert = certList.certificates[0]
+                    c = open("{bssid}.der".format(bssid = bssid), 'wb')
+                    c.write(cert.data)
+                    c.close()
+                    return
 
 
 if __name__ == '__main__':
@@ -55,11 +60,14 @@ if __name__ == '__main__':
     # start all transition handlers
     p_auth = start_process(authentication, (redis_obj(args), mon_if, sta_ids))
     p_assoc = start_process(association, (redis_obj(args), mon_if, sta_ids), \
-            {'rsn_info' : RSN_INFO})
+             {'rsn_info' : RSN_INFO})
     p_eapol_start = start_process(eapol_start, (redis_obj(args), mon_if, sta_ids))
-    p_eap_id = start_process(eap_id, (redis_obj(args), mon_if, sta_ids))
-    p_eap_tls_client_hello = start_process(eap_tls_client_hello, \
-        (redis_obj(args), mon_if, sta_ids))
+    p_eap = start_process(rx_eap, (redis_obj(args), mon_if, sta_ids))
+    p_eap_tx = start_process(peer_eap_tx, (redis_obj(args), mon_if, sta_ids))
+    p_eap_id = start_process(peer_eap_id, (redis_obj(args), mon_if, sta_ids))
+    p_eap_tls_rx = start_process(peer_eap_tls_rx, (redis_obj(args), mon_if, sta_ids))
+    p_eap_tls_tx = start_process(peer_eap_tls_tx, (redis_obj(args), mon_if, sta_ids))
+    p_tls_rx = start_process(peer_tls_rx, (redis_obj(args), mon_if, sta_ids))
     p_cert_dump = start_process(eap_tls_server_cert_dump, \
         (redis_obj(args), mon_if, sta_ids))
 
@@ -78,5 +86,9 @@ if __name__ == '__main__':
     p_auth.terminate()
     p_assoc.terminate()
     p_eapol_start.terminate()
+    p_eap.terminate()
+    p_eap_tx.terminate()
     p_eap_id.terminate()
-    p_eap_tls_client_hello.terminate()
+    p_eap_tls_rx.terminate()
+    p_eap_tls_tx.terminate()
+    p_tls_rx.terminate()

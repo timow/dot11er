@@ -18,13 +18,18 @@ def probe_request(r, mon_if):
 
     ANY -- msg / probe req --> 'probing'"""
 
+    # TODO improve rate handling
+    rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
+            info = Dot11InfoElt(information = "\x82\x84\x8b\x96\x24\x30\x48\x6c"))
+#             info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
+
     ps = r.pubsub()
     ps.subscribe(TX_PROBE_QUEUE(mon_if))
 
     for m in ps.listen():
         req = ast.literal_eval(m['data'])
-        sta = req['sta']
-        bssid = req['bssid']
+        sta = req['sta'].lower()
+        bssid = req['bssid'].lower()
         essid = req['essid']
 
         # TODO introduce proper logging
@@ -37,9 +42,6 @@ def probe_request(r, mon_if):
                 addr3 = bssid)
         ssid = Dot11Elt(ID = DOT11_INFO_ELT['SSID'],\
                 info = Dot11SSIDElt(SSID = essid))
-        # TODO improve rate handling
-        rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
-                info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
         f = mgt/ssid/rates
 
         # remember state
@@ -131,78 +133,7 @@ def eapol_start(r, mon_if, sta_list = None):
             print "[+] successfully associated (BSSID '%s')" % (bssid)
             print "[*]     starting EAPOL"
 
-            r.hset('state', sm(sta, bssid), 'eapol_started')
+            r.hset('state', sm(sta, bssid), 'eap')
             # TODO complete me
 
 #            r.publish(TX_FRAME_QUEUE(mon_if), f)
-
-
-def eap_id(r, mon_if, sta_list = None, \
-        eapid = EAP(code = EAP.RESPONSE, type = EAP.TYPE_ID)/"user@domain.com"):
-    """State transition on EAP ID:
-    Performs EAP ID on request.
-    'eapol_started' -- EAP ID req / EAP ID resp --> 'eap_id'"""
-
-    for f in frames_in_scope(r, RX_EAP_QUEUE(mon_if), sta_list):
-        sta = f.addr1
-        bssid = f.addr3
-
-        if r.hget('state', sm(sta,bssid)) == 'eapol_started':
-            eap = f[EAP]
-            if eap.code != EAP.REQUEST or eap.type != EAP.TYPE_ID:
-                continue
-
-            # TODO introduce proper logging
-            print "[+] EAP ID (BSSID '%s')" % (bssid)
-
-            mgt = Dot11(subtype = Dot11.SUBTYPE['Data']['Data'],\
-                    type = Dot11.TYPE_DATA,\
-                    FCfield = "to-DS",
-                    addr1 = bssid,
-                    addr2 = sta,
-                    addr3 = bssid)
-            eapid.id = eap.id
-            f = mgt/LLC()/SNAP()/EAPOL()/eapid
-
-            r.hset('state', sm(sta, bssid), 'eap_id')
-
-            r.publish(TX_FRAME_QUEUE(mon_if), f)
-
-def eap_tls_client_hello(r, mon_if, sta_list = None, \
-        client_hello = TLSClientHello(compression_methods=range(0xff), cipher_suites=range(0xff))
-        ):
-    """State transition on EAP TLS Client Hello:
-    Performs EAP-TLS Client Hello.
-
-    'eap_id' -- EAP TLS START / EAP TLS Client Hello --> 'eap_tls_client_hello'"""
-
-    for f in frames_in_scope(r, RX_EAP_QUEUE(mon_if), sta_list):
-        sta = f.addr1
-        bssid = f.addr3
-
-        if r.hget('state', sm(sta,bssid)) == 'eap_id':
-            eap = f[EAP]
-            if eap.code != EAP.REQUEST or eap.type != EAP.TYPE_TLS \
-                    or not eap.haslayer(EAPTLSRequest):
-                continue
-
-            eapTls = eap[EAPTLSRequest]
-            if eapTls.EAP_TLS_start != 1:
-                continue
-
-            # TODO introduce proper logging
-            print "[+] EAP TLS Client Hello (BSSID '%s')" % (bssid)
-
-            mgt = Dot11(subtype = Dot11.SUBTYPE['Data']['Data'],\
-                    type = Dot11.TYPE_DATA,\
-                    FCfield = "to-DS",
-                    addr1 = bssid,
-                    addr2 = sta,
-                    addr3 = bssid)
-
-            eap = EAP(code = EAP.RESPONSE, id = eap.id, type = EAP.TYPE_TLS)
-            f = mgt/LLC()/SNAP()/EAPOL()/eap/EAPTLSResponse()/TLSRecord()/TLSHandshake()/client_hello
-
-            r.hset('state', sm(sta, bssid), 'eap_tls_client_hello')
-
-            r.publish(TX_FRAME_QUEUE(mon_if), f)
