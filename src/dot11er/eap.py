@@ -1,11 +1,13 @@
 #!/usr/bin/python
 
-import ast
+import ast,logging
 
 from scapy.all import *
 
 from dot11er.infra import *
 from dot11er.util import frames_in_scope
+
+logger = logging.getLogger('dott11er.eap')
 
 def RX_EAP_FRAME_QUEUE(mon_if):
     """Return name of queue used for EAP frames received on monitoring interface
@@ -59,8 +61,8 @@ def rx_eap(r, mon_if, sta_list = None):
         # TODO validate duplicate detection
         seen_eap_id = r.hget('eap_id', (sta, bssid))
         if str(eap.id) == seen_eap_id:
-            # TODO introduce proper logging
-            print "[*] detected EAP duplicate with EAP.ID '%s'" % (eap.id)
+            logger.info("detected EAP duplicate with EAP.ID '%s'", eap.id, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
             continue
         else:
             r.hset('eap_id', (sta, bssid), eap.id)
@@ -71,8 +73,8 @@ def rx_eap(r, mon_if, sta_list = None):
             elif eap.type == EAP.TYPE_TLS:
                 r.publish(RX_PEER_EAP_TLS_QUEUE(mon_if), msg)
             else:
-                # TODO introduce proper logging
-                print "[-] received EAP peer message with unsupported type '%s'" % (eap.type)
+                logger.warning("received EAP peer message with unsupported type '%s'", eap.type, \
+                        extra = {'sta' : sta, 'bssid' : bssid})
         elif eap.code == EAP.SUCCESS:
             print "[+] EAP success"
         elif eap.code == EAP.FAILURE:
@@ -80,8 +82,8 @@ def rx_eap(r, mon_if, sta_list = None):
         elif eap.code == EAP.RESPONSE:
             r.publish(RX_AUTH_EAP_QUEUE(mon_if), msg)
         else:
-            # TODO introduce proper logging
-            print "[-] received EAP with illegal code '%s'" % (eap.code)
+            logger.warning("received EAP message with illegal code '%s'", eap.code, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
 
 def peer_eap_tx(r, mon_if, sta_list = None):
     """EAP peer layer / TX"""
@@ -132,8 +134,8 @@ def peer_eap_id(r, mon_if, sta_list = None, \
 
         eapid.id = eap.id
 
-        # TODO introduce proper logging
-        print "[+] EAP ID (BSSID '%s')" % (bssid)
+        logger.debug("answering EAP ID request", \
+                extra = {'sta' : sta, 'bssid' : bssid})
 
         r.publish(TX_PEER_EAP_QUEUE(mon_if), {\
                 'sta'    : sta,
@@ -162,12 +164,12 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
 
         if eapTls.EAP_TLS_start == 1:
             if eapTls.length_included == 1 and eapTls.tls_msg_len != 0:
-                # TODO introduce proper logging
-                print "[-] received EAP-TLS/Start with non-zero length (BSSID '%s')" % (bssid)
+                logger.warning("received EAP-TLS/Start with non-zero length", \
+                        extra = {'sta' : sta, 'bssid' : bssid})
                 continue
             elif eapTls.more_fragments != 0:
-                # TODO introduce proper logging
-                print "[-] received EAP-TLS/Start with fragments (BSSID '%s')" % (bssid)
+                logger.warning("received EAP-TLS/Start with fragments", \
+                        extra = {'sta' : sta, 'bssid' : bssid})
                 continue
             else:
                 r.publish(RX_PEER_TLS_QUEUE(mon_if), {\
@@ -178,9 +180,8 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
                         'tls'       : ''
                         })
         else:
-            # TODO introduce proper logging
-            print "[*] received EAP-TLS frame that cannot be handled (BSSID '%s')" % (bssid)
-            eapTls.show2()
+            logger.warning("received EAP-TLS frame that cannot be handled", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
 
             # ack fragment
             r.publish(TX_PEER_EAP_TLS_QUEUE(mon_if), {\
@@ -241,9 +242,10 @@ def peer_tls_rx(r, mon_if, sta_list = None, \
         tls = SSL(msg['tls'])
 
         if tlsStart:
-            # TODO introduce proper logging
-            print "[*] received EAP-TLS/Start (BSSID '%s')" % (bssid)
-            print "[*] sending TLS Client Hello"
+            logger.debug("received EAP-TLS/Start", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.debug("sending EAP-TLS Client Hello", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
 
             tlsRec = TLSRecord()/TLSHandshake()/client_hello
             r.publish(TX_PEER_EAP_TLS_QUEUE(mon_if), {\

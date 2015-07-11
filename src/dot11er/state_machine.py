@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
-import ast
+import ast,logging
+
 from scapy.all import *
 
 from dot11er.infra import *
 from dot11er.util import essid,frames_in_scope
+
+logger = logging.getLogger('dott11er.eap')
 
 def sm(sta, bssid):
     return (sta, bssid)
@@ -32,8 +35,8 @@ def probe_request(r, mon_if):
         bssid = req['bssid'].lower()
         essid = req['essid']
 
-        # TODO introduce proper logging
-        print "[+] probing ESSID '%s' / BSSID '%s' from STA '%s'" % (essid, bssid, sta)
+        logger.info("probing ESSID '%s'", essid, \
+                extra = {'sta' : sta, 'bssid' : bssid})
 
         mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Probe Request'],\
                 type = Dot11.TYPE_MANAGEMENT,\
@@ -62,9 +65,10 @@ def authentication(r, mon_if, sta_list = None, auth = Dot11Auth(algo = "open", s
 
         if r.hget('state', sm(sta,bssid)) == 'probing':
             # TODO check for correct ESSID
-            # TODO introduce proper logging
-            print "[+] successfully probed (ESSID '%s', BSSID '%s')" % (essid(f), bssid)
-            print "[*]     starting authentication"
+            logger.debug("probing ESSID '%s' successful", essid, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.info("authenticating to ESSID '%s'", essid, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
 
             mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Authentication'],\
                     type = Dot11.TYPE_MANAGEMENT,\
@@ -101,9 +105,10 @@ def association(r, mon_if, sta_list = None, \
         if r.hget('state', sm(sta,bssid)) == 'authenticating':
             # TODO check for successful auth
             # TODO check for correct ESSID
-            # TODO introduce proper logging
-            print "[+] successfully authenticated (BSSID '%s')" % (bssid)
-            print "[*]     associating"
+            logger.debug("authenticated to ESSID '%s'", essid, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.info("associating to ESSID '%s'", essid, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
 
             mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Association Request'],\
                     type = Dot11.TYPE_MANAGEMENT,\
@@ -129,9 +134,9 @@ def eapol_start(r, mon_if, sta_list = None):
 
         if r.hget('state', sm(sta,bssid)) == 'associating':
             # TODO check for successful association
-            # TODO introduce proper logging
-            print "[+] successfully associated (BSSID '%s')" % (bssid)
-            print "[*]     starting EAPOL"
+            logger.debug("associated to ESSID '%s'", essid, \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.info("starting EAPOL", extra = {'sta' : sta, 'bssid' : bssid})
 
             r.hset('state', sm(sta, bssid), 'eap')
             # TODO complete me

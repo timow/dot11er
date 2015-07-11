@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-import sys
+import logging,sys
+
 import redis
 
 from dot11er.state_machine import *
@@ -12,6 +13,8 @@ RSN_INFO = Dot11Elt(ID = DOT11_INFO_ELT['RSN'], \
             AKM_List = [Dot11AKMSuite(Suite_Type = DOT11_AKM_SUITE_SELECTOR['IEEE802.1X'])]))
 
 def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
+    logger = logging.getLogger('dot11er.eap.tls_auth_cert_dump')
+
     ps = r.pubsub()
     ps.subscribe(RX_PEER_TLS_QUEUE(mon_if))
 
@@ -29,7 +32,7 @@ def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
         tls = SSL(msg['tls'])
 
         # TODO introduce proper logging
-        print "[+] EAP TLS Server Cert Dump (BSSID '%s')" % (bssid)
+        logger.info('dumping cert', extra = {'sta' : sta, 'bssid' : bssid})
 
         for r in tls.records:
             if r.content_type == 0x16: # handshake
