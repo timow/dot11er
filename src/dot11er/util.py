@@ -5,6 +5,8 @@ import argparse, multiprocessing
 import redis
 from scapy.all import RadioTap,Dot11Elt,DOT11_INFO_ELT
 
+LOG_FORMAT = '%(name)s:%(levelname)s:%(message)s (%(sta)s, %(bssid)s)'
+
 def start_process(func, args = (), kwargs = {}):
     p = multiprocessing.Process(target = func, args = args, kwargs = kwargs)
     p.start()

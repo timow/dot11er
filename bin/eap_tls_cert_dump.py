@@ -5,7 +5,7 @@ import logging,sys
 import redis
 
 from dot11er.state_machine import *
-from dot11er.util import start_process, default_arg_parser, redis_obj
+from dot11er.util import LOG_FORMAT, start_process, default_arg_parser, redis_obj
 
 RSN_INFO = Dot11Elt(ID = DOT11_INFO_ELT['RSN'], \
         info = Dot11RSNElt(
@@ -47,6 +47,8 @@ def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(format = LOG_FORMAT, level = logging.INFO, stream = sys.stdout)
+
     parser = default_arg_parser()
     parser.description = 'EAP-TLS Server Cert Dump.'
     parser.add_argument('-s', '--sta_id', default = str(RandMAC()), \
