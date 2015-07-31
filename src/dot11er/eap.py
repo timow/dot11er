@@ -92,6 +92,8 @@ def peer_eap_tx(r, mon_if, sta_list = None):
     ps.subscribe(TX_PEER_EAP_QUEUE(mon_if))
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 
@@ -122,6 +124,8 @@ def peer_eap_id(r, mon_if, sta_list = None, \
     ps.subscribe(RX_PEER_EAP_ID_QUEUE(mon_if))
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 
@@ -151,6 +155,8 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
     # TODO implement defragmentation
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 
@@ -199,6 +205,8 @@ def peer_eap_tls_tx(r, mon_if, sta_list = None):
 
     # TODO implement fragmentation
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 
@@ -229,6 +237,8 @@ def peer_tls_rx(r, mon_if, sta_list = None, \
     ps.subscribe(RX_PEER_TLS_QUEUE(mon_if))
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 

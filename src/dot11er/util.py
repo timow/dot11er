@@ -20,6 +20,8 @@ def frames_in_scope(r, queue, sta_list = None):
     ps.subscribe(queue)
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         f = frame(m)
 
         sta = f.addr1
@@ -46,6 +48,8 @@ def simple_filter(r, mon_if, IN_QUEUE, OUT_QUEUE, filt):
     out_queue = OUT_QUEUE(mon_if)
     ps.subscribe(in_queue)
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         f = frame(m)
         if filt(f):
             r.publish(out_queue, f)

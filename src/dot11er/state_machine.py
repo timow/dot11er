@@ -30,6 +30,8 @@ def probe_request(r, mon_if):
     ps.subscribe(TX_PROBE_QUEUE(mon_if))
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         req = ast.literal_eval(m['data'])
         sta = req['sta'].lower()
         bssid = req['bssid'].lower()

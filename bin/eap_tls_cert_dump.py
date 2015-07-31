@@ -19,6 +19,8 @@ def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
     ps.subscribe(RX_PEER_TLS_QUEUE(mon_if))
 
     for m in ps.listen():
+        if m['type'] != 'message':
+            continue
         msg = ast.literal_eval(m['data'])
         sta = msg['sta']
 
