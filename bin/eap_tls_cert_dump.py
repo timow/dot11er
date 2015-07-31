@@ -4,6 +4,7 @@ import logging,sys
 
 import redis
 
+from dot11er.eap import *
 from dot11er.state_machine import *
 from dot11er.util import LOG_FORMAT, start_process, default_arg_parser, redis_obj
 
@@ -33,13 +34,12 @@ def eap_tls_server_cert_dump(r, mon_if, sta_list = None):
         tlsStart = int(msg['tls-start'])
         tls = SSL(msg['tls'])
 
-        # TODO introduce proper logging
-        logger.info('dumping cert', extra = {'sta' : sta, 'bssid' : bssid})
-
         for r in tls.records:
             if r.content_type == 0x16: # handshake
                 h = r[TLSHandshake]
                 if h.type == 0x0b: # certificate
+                    logger.info('dumping cert', extra = {'sta' : sta, 'bssid' : bssid})
+
                     certList = h[TLSCertificateList]
                     cert = certList.certificates[0]
                     c = open("{bssid}.der".format(bssid = bssid), 'wb')

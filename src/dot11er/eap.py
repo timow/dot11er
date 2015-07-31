@@ -86,6 +86,16 @@ def rx_eap(r, mon_if, sta_list = None):
             logger.warning("received EAP message with illegal code '%s'", eap.code, \
                     extra = {'sta' : sta, 'bssid' : bssid})
 
+def get_eap_frag(r, sta, bssid):
+    f = r.hget('eap_frag', (sta, bssid))
+    if f:
+        return f
+    else:
+        return ""
+
+def set_eap_frag(r, sta, bssid, frag):
+    r.hset('eap_frag', (sta, bssid), frag)
+
 def peer_eap_tx(r, mon_if, sta_list = None):
     """EAP peer layer / TX"""
 
@@ -191,6 +201,34 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
                         'tls-start' : str(eapTls.EAP_TLS_start),
                         'tls'       : ''
                         })
+
+        elif eapTls.more_fragments == 1:
+            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
+            set_eap_frag(r, sta, bssid, frag)
+
+            if len(frag) >= eapTls.tls_msg_len:
+                logger.warning("expecting more frags exceeding EAP-TLS msg len", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+
+            # ack fragment
+            r.publish(TX_PEER_EAP_TLS_QUEUE(mon_if), {\
+                    'sta'        : sta,
+                    'bssid'      : bssid,
+                    'eap-id'     : str(eap.id),
+                    'tls-record' : ''
+                    })
+
+        elif eapTls.more_fragments == 0:
+            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
+            set_eap_frag(r, sta, bssid, "")
+
+            r.publish(RX_PEER_TLS_QUEUE(mon_if), {\
+                    'sta'       : sta,
+                    'bssid'     : bssid,
+                    'eap-id'    : str(eap.id),
+                    'tls-start' : str(eapTls.EAP_TLS_start),
+                    'tls'       : frag
+                    })
         else:
             logger.warning("received EAP-TLS frame that cannot be handled", \
                     extra = {'sta' : sta, 'bssid' : bssid})

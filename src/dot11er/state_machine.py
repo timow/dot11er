@@ -6,7 +6,8 @@ from enum import Enum
 from scapy.all import *
 
 from dot11er.infra import *
-from dot11er.util import essid,frames_in_scope
+import dot11er.util
+from dot11er.util import frames_in_scope
 
 logger = logging.getLogger('dott11er.eap')
 
@@ -95,11 +96,42 @@ def authentication(r, mon_if, sta_list = None, auth = Dot11Auth(algo = "open", s
                     type = Dot11.TYPE_MANAGEMENT,
                     addr1 = bssid,
                     addr2 = sta,
-                    addr3 = bssid)
+                    addr3 = bssid,
+                    SC = sn << 4)
             f = mgt/auth
             set_state(r, sta, bssid, State.authenticating, sn + 1)
             r.hset('essid', (sta, bssid), essid)
             r.publish(TX_FRAME_QUEUE(mon_if), f)
+
+        elif state == State.authenticating:
+            # check for retry
+            if (f.FCfield & 8) >> 3:
+                logger.debug("rx probe resp retry, tx auth req retry",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Authentication'],
+                        type = Dot11.TYPE_MANAGEMENT,
+                        FCfield = "retry",
+                        addr1 = bssid,
+                        addr2 = sta,
+                        addr3 = bssid,
+                        SC = (sn - 1) << 4)
+            else:
+                logger.debug("rx duplicate probe resp not marked as retry, resending auth req",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Authentication'],
+                        type = Dot11.TYPE_MANAGEMENT,
+                        addr1 = bssid,
+                        addr2 = sta,
+                        addr3 = bssid,
+                        SC = sn << 4)
+                set_state(r, sta, bssid, state, sn + 1)
+            f = mgt/auth
+#            r.publish(TX_FRAME_QUEUE(mon_if), f)
+
+        else:
+            logger.debug("rx probe resp while being authenticated",
+                    extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+
 
 def association(r, mon_if, sta_list = None, \
         assoc = Dot11AssoReq(cap = 0x3104), \
@@ -198,4 +230,18 @@ def eapol_start(r, mon_if, sta_list = None):
 
             # TODO complete me
 
-#            r.publish(TX_FRAME_QUEUE(mon_if), f)
+        elif state == State.associated:
+            # check for retry
+            if (f.FCfield & 8) >> 3:
+                logger.debug("rx assoc resp retry, tx EAPOL start retry",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                # TODO complete me
+            else:
+                logger.debug("rx duplicate assoc resp not marked as retry, resending EAPOL start",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                # TODO complete me
+        else:
+            logger.warning("rx assoc resp while neither associating nor being associated",
+                    extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+
+# TODO implement disassoc / deauth / reassoc
