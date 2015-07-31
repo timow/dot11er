@@ -36,12 +36,10 @@ def probe_request(r, mon_if):
     Requests must have the form
     "{ 'sta'       : STATION MAC,
        'bssid'     : BSSID,
-       'essid'     : ESSID}".
-
-    ANY -- msg / probe req --> 'probing'"""
+       'essid'     : ESSID}"."""
 
     # TODO improve rate handling
-    rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
+    rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],
             info = Dot11InfoElt(information = "\x82\x84\x8b\x96\x24\x30\x48\x6c"))
 #             info = Dot11InfoElt(information = "\x02\x04\x0b\x16"))
 
@@ -57,11 +55,11 @@ def probe_request(r, mon_if):
         essid = req['essid']
         (state, sn) = get_state(r, sta, bssid)
 
-        logger.info("probing ESSID '%s'", essid, \
-                extra = {'sta' : sta, 'bssid' : bssid})
+        logger.info("probing",
+                extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
 
-        mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Probe Request'],\
-                type = Dot11.TYPE_MANAGEMENT,\
+        mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Probe Request'],
+                type = Dot11.TYPE_MANAGEMENT,
                 addr1 = bssid,
                 addr2 = sta,
                 addr3 = bssid,
@@ -76,8 +74,7 @@ def probe_request(r, mon_if):
 def authentication(r, mon_if, sta_list = None, auth = Dot11Auth(algo = "open", seqnum = 1)):
     """State transition on authentication:
     Performs authentication on received probe response.
-
-    'probing' -- probe resp / auth --> 'authenticating'"""
+    """
 
     for f in frames_in_scope(r, RX_PROBE_RESP_QUEUE(mon_if), sta_list):
         sta = f.addr1
@@ -113,8 +110,7 @@ def association(r, mon_if, sta_list = None, \
         ):
     """State transition on association:
     Performs association on successful received authentication.
-
-    'authenticating' -- auth / assoc --> 'associating'"""
+    """
 
     # TODO improve rate handling
     rates = Dot11Elt(ID = DOT11_INFO_ELT['Supported Rates'],\
@@ -134,29 +130,54 @@ def association(r, mon_if, sta_list = None, \
 
         if state == State.authenticating:
             # TODO check for successful auth
-            # TODO check for correct ESSID
-            logger.debug("authenticated to ESSID '%s'", essid, \
-                    extra = {'sta' : sta, 'bssid' : bssid})
-            logger.info("associating to ESSID '%s'", essid, \
-                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.info("associating",
+                    extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
 
-            mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Association Request'],\
-                    type = Dot11.TYPE_MANAGEMENT,\
+            mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Association Request'],
+                    type = Dot11.TYPE_MANAGEMENT,
                     addr1 = bssid,
                     addr2 = sta,
-                    addr3 = bssid)
-            ssid = Dot11Elt(ID = DOT11_INFO_ELT['SSID'],\
-                    info = Dot11SSIDElt(SSID = essid))
+                    addr3 = bssid,
+                    SC = sn << 4)
             f = mgt/assoc/ssid/rates/rsn_info
 
             set_state(r, sta, bssid, State.associating, sn + 1)
 
             r.publish(TX_FRAME_QUEUE(mon_if), f)
 
+        elif state == State.associating:
+            # check for retry
+            if (f.FCfield & 8) >> 3:
+                logger.debug("rx auth resp retry, tx assoc req retry",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Association Request'],
+                        type = Dot11.TYPE_MANAGEMENT,
+                        FCfield = "retry",
+                        addr1 = bssid,
+                        addr2 = sta,
+                        addr3 = bssid,
+                        SC = (sn - 1) << 4)
+            else:
+                logger.debug("rx duplicate auth resp not marked as retry, resending assoc req",
+                        extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+                mgt = Dot11(subtype = Dot11.SUBTYPE['Management']['Association Request'],
+                        type = Dot11.TYPE_MANAGEMENT,
+                        addr1 = bssid,
+                        addr2 = sta,
+                        addr3 = bssid,
+                        SC = sn << 4)
+                set_state(r, sta, bssid, state, sn + 1)
+            f = mgt/assoc/ssid/rates/rsn_info
+#            r.publish(TX_FRAME_QUEUE(mon_if), f)
+
+        else:
+            logger.warning("rx auth resp while neither authenticating nor associating",
+                    extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
+
 def eapol_start(r, mon_if, sta_list = None):
     """State transition on EAPOL start:
     Start EAPOL on successful association.
-    'associating' -- associaton resp / EAPOL_start --> 'eapol_started'"""
+    """
 
     for f in frames_in_scope(r, RX_ASSOC_RESP_QUEUE(mon_if), sta_list):
         sta = f.addr1
@@ -169,9 +190,6 @@ def eapol_start(r, mon_if, sta_list = None):
 
         if state == State.associating:
             # TODO check for successful association
-            logger.debug("associated to ESSID '%s'", essid, \
-                    extra = {'sta' : sta, 'bssid' : bssid})
-            logger.info("starting EAPOL", extra = {'sta' : sta, 'bssid' : bssid})
 
             logger.info("starting EAPOL",
                     extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
