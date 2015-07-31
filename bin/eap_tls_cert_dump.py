@@ -80,6 +80,7 @@ if __name__ == '__main__':
 
     # initiate dump via probe request
     r = redis_obj(args)
+    init(r, args.sta_id, args.bssid)
     r.publish(TX_PROBE_QUEUE(mon_if), {\
             'sta'   : args.sta_id,
             'bssid' : args.bssid,

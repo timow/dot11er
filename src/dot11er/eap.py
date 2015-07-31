@@ -5,6 +5,7 @@ import ast,logging
 from scapy.all import *
 
 from dot11er.infra import *
+from dot11er.state_machine import get_state, set_state
 from dot11er.util import frames_in_scope
 
 logger = logging.getLogger('dott11er.eap')
@@ -102,6 +103,8 @@ def peer_eap_tx(r, mon_if, sta_list = None):
             continue
 
         bssid = msg['bssid']
+        (state, sn) = get_state(r, sta, bssid)
+
         eap = EAP(msg['eap'])
 
         mgt = Dot11(subtype = Dot11.SUBTYPE['Data']['Data'],\
@@ -109,10 +112,13 @@ def peer_eap_tx(r, mon_if, sta_list = None):
                 FCfield = "to-DS",
                 addr1 = bssid,
                 addr2 = sta,
-                addr3 = bssid)
+                addr3 = bssid,
+                SC = sn << 4)
         f = mgt/LLC()/SNAP()/EAPOL()/eap
 
         # TODO implement retransmission
+
+        set_state(r, sta, bssid, state, sn + 1)
 
         r.publish(TX_FRAME_QUEUE(mon_if), f)
 
