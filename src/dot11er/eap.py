@@ -74,7 +74,6 @@ def rx_eap(r, mon_if, sta_list = None):
         eap = f[EAP]
         msg = {'sta' : sta, 'bssid' : bssid, 'eap' : str(eap)}
 
-        # TODO validate duplicate detection
         seen_eap_id = r.hget('eap_id', (sta, bssid))
         if str(eap.id) == seen_eap_id:
             logger.debug("detected EAP duplicate with EAP.ID '%s'", eap.id, \
