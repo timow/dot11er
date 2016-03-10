@@ -25,6 +25,21 @@ def RX_PEER_EAP_ID_QUEUE(mon_if):
     monitoring interface 'mon_if'."""
     return "%s.rx_peer_eap_id" % mon_if
 
+def RX_PEER_EAP_PEAP_QUEUE(mon_if):
+    """Return name of queue used for EAP PEAP messages received for a peer on
+    monitoring interface 'mon_if'."""
+    return "%s.rx_peer_peap_tls" % mon_if
+
+def TX_PEER_EAP_PEAP_QUEUE(mon_if):
+    """Return name of queue used for EAP PEAP messages to be send as a peer on
+    monitoring interface 'mon_if'."""
+    return "%s.tx_peer_eap_peap" % mon_if
+
+def RX_PEER_PEAP_QUEUE(mon_if):
+    """Return name of queue used for PEAP messages received for a peer on
+    monitoring interface 'mon_if'."""
+    return "%s.rx_peer_peap" % mon_if
+
 def RX_PEER_EAP_TLS_QUEUE(mon_if):
     """Return name of queue used for EAP TLS messages received for a peer on
     monitoring interface 'mon_if'."""
@@ -71,6 +86,8 @@ def rx_eap(r, mon_if, sta_list = None):
         if eap.code == EAP.REQUEST:
             if eap.type == EAP.TYPE_ID:
                 r.publish(RX_PEER_EAP_ID_QUEUE(mon_if), msg)
+            elif eap.type == EAP.TYPE_PEAP:
+                r.publish(RX_PEER_EAP_PEAP_QUEUE(mon_if), msg)
             elif eap.type == EAP.TYPE_TLS:
                 r.publish(RX_PEER_EAP_TLS_QUEUE(mon_if), msg)
             else:
@@ -162,13 +179,148 @@ def peer_eap_id(r, mon_if, sta_list = None, \
                 'bssid'  : bssid,
                 'eap'    : str(eapid)})
 
+def peer_eap_peap_rx(r, mon_if, sta_list = None):
+    """EAP-PEAP peer layer / RX"""
+
+    ps = r.pubsub()
+    ps.subscribe(RX_PEER_EAP_PEAP_QUEUE(mon_if))
+
+    for m in ps.listen():
+        if m['type'] != 'message':
+            continue
+        msg = ast.literal_eval(m['data'])
+        sta = msg['sta']
+
+        # skip frame if STA is not in scope
+        if sta_list and sta not in sta_list:
+            continue
+
+        bssid = msg['bssid']
+        eap = EAP(msg['eap'])
+        eapTls = eap[EAPTLSRequest]
+
+        if eapTls.EAP_TLS_start == 1:
+            if eapTls.length_included == 1 and eapTls.tls_msg_len != 0:
+                logger.warning("received EAP-PEAP/Start with non-zero length", \
+                        extra = {'sta' : sta, 'bssid' : bssid})
+                continue
+            elif eapTls.more_fragments != 0:
+                logger.warning("received EAP-PEAP/Start with fragments", \
+                        extra = {'sta' : sta, 'bssid' : bssid})
+                continue
+            else:
+                r.publish(RX_PEER_PEAP_QUEUE(mon_if), {\
+                        'sta'       : sta,
+                        'bssid'     : bssid,
+                        'eap-id'    : str(eap.id),
+                        'tls-start' : str(eapTls.EAP_TLS_start),
+                        'tls'       : ''
+                        })
+
+        elif eapTls.more_fragments == 1:
+            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
+            set_eap_frag(r, sta, bssid, frag)
+
+            if len(frag) >= eapTls.tls_msg_len:
+                logger.warning("expecting more frags exceeding EAP-PEAP msg len", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+
+            # ack fragment
+            r.publish(TX_PEER_EAP_PEAP_QUEUE(mon_if), {\
+                    'sta'        : sta,
+                    'bssid'      : bssid,
+                    'eap-id'     : str(eap.id),
+                    'tls-record' : ''
+                    })
+
+        else: # eapTls.more_fragments == 0:
+            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
+            set_eap_frag(r, sta, bssid, "")
+
+            # publish defragmented PEAP msg
+            r.publish(RX_PEER_PEAP_QUEUE(mon_if), {\
+                    'sta'       : sta,
+                    'bssid'     : bssid,
+                    'eap-id'    : str(eap.id),
+                    'tls-start' : str(eapTls.EAP_TLS_start),
+                    'tls'       : frag
+                    })
+
+def peer_eap_peap_tx(r, mon_if, sta_list = None):
+    """EAP-PEAP peer layer / TX"""
+
+    ps = r.pubsub()
+    ps.subscribe(TX_PEER_EAP_PEAP_QUEUE(mon_if))
+
+    # TODO implement fragmentation
+    for m in ps.listen():
+        if m['type'] != 'message':
+            continue
+        msg = ast.literal_eval(m['data'])
+        sta = msg['sta']
+
+        # skip frame if STA is not in scope
+        if sta_list and sta not in sta_list:
+            continue
+
+        bssid = msg['bssid']
+        eapId = int(msg['eap-id'])
+        tlsRec = msg['tls-record']
+
+        if len(tlsRec) > 0:
+            eap = EAP(code = EAP.RESPONSE, id = eapId, type = EAP.TYPE_PEAP)/EAPTLSResponse()/tlsRec
+        else:
+            eap = EAP(code = EAP.RESPONSE, id = eapId, type = EAP.TYPE_PEAP)/EAPTLSResponse()
+
+        r.publish(TX_PEER_EAP_QUEUE(mon_if), {\
+                    'sta'        : sta,
+                    'bssid'      : bssid,
+                    'eap'        : str(eap),
+                    })
+
+def peer_peap_rx(r, mon_if, sta_list = None, \
+        client_hello = TLSClientHello(compression_methods=range(0xff), cipher_suites=range(0xff))):
+    """PEAP peer layer / RX"""
+
+    ps = r.pubsub()
+    ps.subscribe(RX_PEER_TLS_QUEUE(mon_if))
+
+    for m in ps.listen():
+        if m['type'] != 'message':
+            continue
+        msg = ast.literal_eval(m['data'])
+        sta = msg['sta']
+
+        # skip frame if STA is not in scope
+        if sta_list and sta not in sta_list:
+            continue
+
+        bssid = msg['bssid']
+        eapId = msg['eap-id']
+        tlsStart = int(msg['tls-start'])
+        tls = SSL(msg['tls'])
+
+        if tlsStart:
+            logger.debug("received EAP-PEAP/Start", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+            logger.debug("sending EAP-TLS Client Hello", \
+                    extra = {'sta' : sta, 'bssid' : bssid})
+
+            tlsRec = TLSRecord()/TLSHandshake()/client_hello
+            r.publish(TX_PEER_EAP_PEAP_QUEUE(mon_if), {\
+                    'sta'        : sta,
+                    'bssid'      : bssid,
+                    'eap-id'     : eapId,
+                    'tls-record' : str(tlsRec)
+                    })
+        else:
+            tls.show2()
+
 def peer_eap_tls_rx(r, mon_if, sta_list = None):
     """EAP-TLS peer layer / RX"""
 
     ps = r.pubsub()
     ps.subscribe(RX_PEER_EAP_TLS_QUEUE(mon_if))
-
-    # TODO implement defragmentation
 
     for m in ps.listen():
         if m['type'] != 'message':
@@ -208,29 +360,6 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
 
             if len(frag) >= eapTls.tls_msg_len:
                 logger.warning("expecting more frags exceeding EAP-TLS msg len", \
-                    extra = {'sta' : sta, 'bssid' : bssid})
-
-            # ack fragment
-            r.publish(TX_PEER_EAP_TLS_QUEUE(mon_if), {\
-                    'sta'        : sta,
-                    'bssid'      : bssid,
-                    'eap-id'     : str(eap.id),
-                    'tls-record' : ''
-                    })
-
-        elif eapTls.more_fragments == 0:
-            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
-            set_eap_frag(r, sta, bssid, "")
-
-            r.publish(RX_PEER_TLS_QUEUE(mon_if), {\
-                    'sta'       : sta,
-                    'bssid'     : bssid,
-                    'eap-id'    : str(eap.id),
-                    'tls-start' : str(eapTls.EAP_TLS_start),
-                    'tls'       : frag
-                    })
-        else:
-            logger.warning("received EAP-TLS frame that cannot be handled", \
                     extra = {'sta' : sta, 'bssid' : bssid})
 
             # ack fragment
