@@ -105,10 +105,7 @@ def rx_eap(r, mon_if, sta_list = None):
 
 def get_eap_frag(r, sta, bssid):
     f = r.hget('eap_frag', (sta, bssid))
-    if f:
-        return f
-    else:
-        return ""
+    return f if f else ""
 
 def set_eap_frag(r, sta, bssid, frag):
     r.hset('eap_frag', (sta, bssid), frag)
