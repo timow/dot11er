@@ -366,6 +366,19 @@ def peer_eap_tls_rx(r, mon_if, sta_list = None):
                     'tls-record' : ''
                     })
 
+        else: # eapTls.more_fragments == 0:
+            frag = get_eap_frag(r, sta, bssid) + str(eapTls.payload)
+            set_eap_frag(r, sta, bssid, "")
+
+            # publish defragmented TLS msg
+            r.publish(RX_PEER_TLS_QUEUE(mon_if), {\
+                    'sta'       : sta,
+                    'bssid'     : bssid,
+                    'eap-id'    : str(eap.id),
+                    'tls-start' : str(eapTls.EAP_TLS_start),
+                    'tls'       : frag
+                    })
+
 def peer_eap_tls_tx(r, mon_if, sta_list = None):
     """EAP-TLS peer layer / TX"""
 
