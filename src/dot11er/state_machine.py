@@ -27,6 +27,16 @@ def get_state(r, sta, bssid):
 def set_state(r, sta, bssid, st, sn):
     r.hset('state', (sta,bssid), (st.index, sn))
 
+def get_group_cipher(r, sta, bssid):
+    gc = r.hget('group_cipher', (sta,bssid))
+    if gc:
+        return Dot11CipherSuite(Suite_Type = int(gc))
+    else:
+        return Dot11CipherSuite(Suite_Type = DOT11_CIPHER_SUITE_TYPE['CCMP'])
+
+def set_group_cipher(r, sta, bssid, gc):
+    r.hset('group_cipher', (sta,bssid), gc)
+
 def probe_request(r, mon_if):
     """Listen on 'probe_request' queue for requests to send out probes.
     Requests must have the form
@@ -217,6 +227,8 @@ def eapol_start(r, mon_if, sta_list = None):
 
         if state == State.associating:
             # TODO check for successful association
+            # TODO check for error message on invalid group cipher
+            #   (fixed parameters, status code 0x0029 / invalid group cipher)
 
             logger.info("starting EAPOL",
                     extra = {'sta' : sta, 'bssid' : bssid, 'essid' : essid})
