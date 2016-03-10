@@ -11,12 +11,7 @@ from dot11er.util import frames_in_scope
 
 logger = logging.getLogger('dott11er.eap')
 
-# TODO change to proper enum
-class State(Enum):
-    unauthenticated  = 1
-    authenticating   = 2
-    associating      = 3
-    associated       = 4
+State = Enum('unauthenticated', 'authenticating', 'associating', 'associated')
 
 def init(r, sta, bssid):
     set_state(r, sta, bssid, State.unauthenticated, 0)
@@ -25,12 +20,12 @@ def get_state(r, sta, bssid):
     t = r.hget('state', (sta,bssid))
     if t:
         (st, sn) = ast.literal_eval(t)
-        return (State(int(st)), int(sn))
+        return (State[int(st)], int(sn))
     else:
         return (State.unauthenticated, 0)
 
 def set_state(r, sta, bssid, st, sn):
-    r.hset('state', (sta,bssid), (st.value, sn))
+    r.hset('state', (sta,bssid), (st.index, sn))
 
 def probe_request(r, mon_if):
     """Listen on 'probe_request' queue for requests to send out probes.
